@@ -1,0 +1,14 @@
+.omx/
+.omc/
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+images/
+web/
+tests/
+docs/
+db/
+src/db/
