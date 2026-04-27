@@ -8,6 +8,6 @@ coverage/
 !.env.example
 images/
 web/
-tests/
 docs/
-
+scripts/
+artifacts/
