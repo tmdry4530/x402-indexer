@@ -37,7 +37,7 @@ PostgreSQL
   ├─ aggregate tables
   └─ operations tables
   ↓
-Hono API
+NestJS API
   ↓
 Web Dashboard
 ```
@@ -67,7 +67,11 @@ src/
   config.ts                환경 설정 로드/검증
 
   api/
-    app.ts                 Hono API 라우터
+    app.ts                 Nest 애플리케이션 factory / static assets 설정
+    api.module.ts          Nest 동적 모듈 및 DI wiring
+    api.controller.ts      HTTP route contract
+    api.service.ts         validation/cache/query orchestration
+    services.ts            API 런타임 의존성 token/interface
 
   db/
     client.ts              PostgreSQL/Redis/context 생성
@@ -267,6 +271,6 @@ reorg가 감지되면 현재 블록을 억지로 계속 처리하지 않고, 안
 | `src/workers/backfillWorker.ts` | 과거/누락/reorg 구간 백필 |
 | `src/db/checkpoints.ts` | checkpoint, lock, rewind 처리 |
 | `src/db/backfillJobs.ts` | backfill range 기록 |
-| `src/api/app.ts` | Hono API route |
+| `src/api/app.ts` | Nest API 앱 factory / static assets 설정 |
 | `src/db/api-queries.ts` | 대시보드/API 조회 SQL |
 | `web/` | 정적 대시보드 UI |

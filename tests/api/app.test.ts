@@ -1,8 +1,16 @@
+import request from 'supertest';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createApp } from '../../src/api/app.js';
+import { createApp, type AppServices } from '../../src/api/app.js';
 import { createTestDb, createTestRedis } from '../helpers/test-context.js';
 
+async function createHttpApp(services: AppServices): Promise<NestExpressApplication> {
+  return createApp(services, { logger: false, staticAssets: false });
+}
+
 describe('createApp', () => {
+  let app: NestExpressApplication | null = null;
+
   async function seedReadModel(): Promise<Awaited<ReturnType<typeof createTestDb>>> {
     const db = await createTestDb();
     await db.query(
@@ -41,30 +49,34 @@ describe('createApp', () => {
     return db;
   }
 
-  afterEach(() => {
+  afterEach(async () => {
     vi.restoreAllMocks();
+    if (app) {
+      await app.close();
+      app = null;
+    }
   });
 
   it('returns health and payments data', async () => {
     const db = await seedReadModel();
 
-    const app = createApp({
+    app = await createHttpApp({
       db,
       enqueueBackfill: vi.fn(async () => {}),
     });
+    const api = request(app.getHttpServer());
 
-    const health = await app.request('/health');
+    const health = await api.get('/health');
     expect(health.status).toBe(200);
-    await expect(health.json()).resolves.toEqual({ ok: true });
+    expect(health.body).toEqual({ ok: true });
 
-    const payments = await app.request('/payments');
+    const payments = await api.get('/payments');
     expect(payments.status).toBe(200);
-    const paymentsBody = await payments.json();
-    expect(paymentsBody.data).toHaveLength(1);
+    expect(payments.body.data).toHaveLength(1);
 
-    const overview = await app.request('/overview');
+    const overview = await api.get('/overview');
     expect(overview.status).toBe(200);
-    await expect(overview.json()).resolves.toMatchObject({
+    expect(overview.body).toMatchObject({
       data: {
         payments_count: 1,
         evidence_count: 1,
@@ -73,21 +85,20 @@ describe('createApp', () => {
       },
     });
 
-    const backfill = await app.request('/jobs/backfill', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ startBlock: '1', endBlock: '10' }),
-    });
+    const backfill = await api
+      .post('/jobs/backfill')
+      .send({ startBlock: '1', endBlock: '10' });
     expect(backfill.status).toBe(202);
   }, 15000);
 
   it('serves the remaining read endpoints and not-found responses', async () => {
     const db = await seedReadModel();
-    const app = createApp({ db });
+    app = await createHttpApp({ db });
+    const api = request(app.getHttpServer());
 
-    const agent = await app.request('/agents/0xagent');
+    const agent = await api.get('/agents/0xagent');
     expect(agent.status).toBe(200);
-    await expect(agent.json()).resolves.toMatchObject({
+    expect(agent.body).toMatchObject({
       data: {
         address: '0xagent',
         payment_count: 1,
@@ -96,9 +107,9 @@ describe('createApp', () => {
       },
     });
 
-    const agentStats = await app.request('/agents/0xagent/stats');
+    const agentStats = await api.get('/agents/0xagent/stats');
     expect(agentStats.status).toBe(200);
-    await expect(agentStats.json()).resolves.toMatchObject({
+    expect(agentStats.body).toMatchObject({
       data: [
         {
           agent_address: '0xagent',
@@ -107,18 +118,18 @@ describe('createApp', () => {
       ],
     });
 
-    const service = await app.request('/services/0xservice');
+    const service = await api.get('/services/0xservice');
     expect(service.status).toBe(200);
-    await expect(service.json()).resolves.toMatchObject({
+    expect(service.body).toMatchObject({
       data: {
         address: '0xservice',
         payment_count: 1,
       },
     });
 
-    const interactions = await app.request('/interactions?agentAddress=0xagent');
+    const interactions = await api.get('/interactions?agentAddress=0xagent');
     expect(interactions.status).toBe(200);
-    await expect(interactions.json()).resolves.toMatchObject({
+    expect(interactions.body).toMatchObject({
       data: [
         {
           agent_address: '0xagent',
@@ -127,9 +138,9 @@ describe('createApp', () => {
       ],
     });
 
-    const daily = await app.request('/stats/daily?agentAddress=0xagent');
+    const daily = await api.get('/stats/daily?agentAddress=0xagent');
     expect(daily.status).toBe(200);
-    await expect(daily.json()).resolves.toMatchObject({
+    expect(daily.body).toMatchObject({
       data: [
         {
           agent_address: '0xagent',
@@ -138,8 +149,8 @@ describe('createApp', () => {
       ],
     });
 
-    expect((await app.request('/agents/0xmissing')).status).toBe(404);
-    expect((await app.request('/services/0xmissing')).status).toBe(404);
+    expect((await api.get('/agents/0xmissing')).status).toBe(404);
+    expect((await api.get('/services/0xmissing')).status).toBe(404);
   }, 15000);
 
   it('serves UI-supporting list, detail, and operations endpoints', async () => {
@@ -156,18 +167,19 @@ describe('createApp', () => {
       `INSERT INTO address_registry (address, type, name)
        VALUES ('0xasset', 'asset', 'test asset')`,
     );
-    const app = createApp({ db });
+    app = await createHttpApp({ db });
+    const api = request(app.getHttpServer());
 
-    await expect((await app.request('/agents')).json()).resolves.toMatchObject({
+    expect((await api.get('/agents')).body).toMatchObject({
       data: [{ address: '0xagent', payment_count: 1 }],
     });
-    await expect((await app.request('/services')).json()).resolves.toMatchObject({
+    expect((await api.get('/services')).body).toMatchObject({
       data: [{ address: '0xservice', payment_count: 1 }],
     });
-    await expect((await app.request('/evidence')).json()).resolves.toMatchObject({
+    expect((await api.get('/evidence')).body).toMatchObject({
       data: [{ transaction_hash: '0xtx', confidence: 90, promoted: true }],
     });
-    await expect((await app.request('/payments/0xtx/0')).json()).resolves.toMatchObject({
+    expect((await api.get('/payments/0xtx/0')).body).toMatchObject({
       data: {
         transaction_hash: '0xtx',
         log_index: 0,
@@ -175,16 +187,16 @@ describe('createApp', () => {
         submitter: '0xagent',
       },
     });
-    await expect((await app.request('/operations/checkpoints')).json()).resolves.toMatchObject({
+    expect((await api.get('/operations/checkpoints')).body).toMatchObject({
       data: [{ worker_name: 'backfill_default', status: 'running' }],
     });
-    await expect((await app.request('/operations/backfill-jobs')).json()).resolves.toMatchObject({
+    expect((await api.get('/operations/backfill-jobs')).body).toMatchObject({
       data: [{ status: 'completed' }],
     });
-    await expect((await app.request('/operations/address-registry')).json()).resolves.toMatchObject({
+    expect((await api.get('/operations/address-registry')).body).toMatchObject({
       data: [{ address: '0xasset', type: 'asset' }],
     });
-    await expect((await app.request('/operations/status')).json()).resolves.toMatchObject({
+    expect((await api.get('/operations/status')).body).toMatchObject({
       data: {
         api_ok: true,
       },
@@ -193,41 +205,39 @@ describe('createApp', () => {
 
   it('validates backfill requests and reports worker availability', async () => {
     const db = await createTestDb();
-    const app = createApp({ db });
+    app = await createHttpApp({ db });
+    const api = request(app.getHttpServer());
 
     expect(
       (
-        await app.request('/jobs/backfill', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ startBlock: '10', endBlock: '1' }),
-        })
+        await api
+          .post('/jobs/backfill')
+          .send({ startBlock: '10', endBlock: '1' })
       ).status,
     ).toBe(400);
 
     expect(
       (
-        await app.request('/jobs/backfill', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ startBlock: '1', endBlock: '10' }),
-        })
-    ).status,
+        await api
+          .post('/jobs/backfill')
+          .send({ startBlock: '1', endBlock: '10' })
+      ).status,
     ).toBe(503);
   });
 
   it('serves cached dashboard responses from Redis on repeated reads', async () => {
     const db = await seedReadModel();
     const redis = createTestRedis();
-    const app = createApp({ db, redis });
+    app = await createHttpApp({ db, redis });
+    const api = request(app.getHttpServer());
 
-    const first = await app.request('/payments?payer=0xagent');
+    const first = await api.get('/payments?payer=0xagent');
     expect(first.status).toBe(200);
     await db.query(`DELETE FROM payments`);
 
-    const second = await app.request('/payments?payer=0xagent');
+    const second = await api.get('/payments?payer=0xagent');
     expect(second.status).toBe(200);
-    await expect(second.json()).resolves.toMatchObject({
+    expect(second.body).toMatchObject({
       data: [
         {
           payer: '0xagent',
@@ -238,7 +248,7 @@ describe('createApp', () => {
 
   it('falls back to the database when Redis read/write operations fail', async () => {
     const db = await seedReadModel();
-    const app = createApp({
+    app = await createHttpApp({
       db,
       redis: {
         get: async () => {
@@ -249,28 +259,42 @@ describe('createApp', () => {
         },
       },
     });
+    const api = request(app.getHttpServer());
 
-    const response = await app.request('/payments?payer=0xagent');
+    const response = await api.get('/payments?payer=0xagent');
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
+    expect(response.body).toMatchObject({
       data: [
         {
           payer: '0xagent',
         },
       ],
     });
-  }, 15000);
+  });
+
+  it('preserves dashboard root redirects and static UI serving', async () => {
+    const db = await createTestDb();
+    app = await createApp({ db }, { logger: false });
+    const api = request(app.getHttpServer());
+
+    const root = await api.get('/');
+    expect(root.status).toBe(302);
+    expect(root.headers.location).toBe('/ui/');
+
+    const ui = await api.get('/ui/');
+    expect(ui.status).toBe(200);
+    expect(ui.text).toContain('x402 인덱서');
+  });
 
   it('accepts backfill requests through the shared enqueue path even when no worker-specific runtime is present', async () => {
     const db = await createTestDb();
     const enqueueBackfill = vi.fn(async () => undefined);
-    const app = createApp({ db, enqueueBackfill });
+    app = await createHttpApp({ db, enqueueBackfill });
+    const api = request(app.getHttpServer());
 
-    const response = await app.request('/jobs/backfill', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ startBlock: '1', endBlock: '10' }),
-    });
+    const response = await api
+      .post('/jobs/backfill')
+      .send({ startBlock: '1', endBlock: '10' });
 
     expect(response.status).toBe(202);
     expect(enqueueBackfill).toHaveBeenCalledWith({ startBlock: 1n, endBlock: 10n });
