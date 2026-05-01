@@ -68,15 +68,39 @@ src/
 
   api/
     app.ts                 Nest 애플리케이션 factory / static assets 설정
-    api.module.ts          Nest 동적 모듈 및 DI wiring
-    api.controller.ts      HTTP route contract
-    api.service.ts         validation/cache/query orchestration
-    services.ts            API 런타임 의존성 token/interface
+    api.module.ts          composition root / DI wiring
+    routes.ts              HTTP route 상수
+    schemas/               공통 request schema
+    payments/              payment controller/schema
+    agents/                agent controller/schema
+    service-catalog/       service controller/schema
+    evidence/              evidence controller/schema
+    interactions/          interaction controller/schema
+    stats/                 stats controller/schema
+    operations/            operations controller/schema
+    backfill/              backfill controller/schema
+    health/, overview/, ui/ 얇은 route/controller
+
+  runtime/
+    api-dependencies.ts    API composition root 입력 타입
+
+  application/
+    */*.usecase.ts         API 동작별 유스케이스
+    ports/                 cache/queue/repository DI token과 port
+    errors/                HTTP와 분리된 application error
+
+  domain/
+    */*.repository.ts      기능별 repository interface
+    common/                pagination 등 공통 domain input
+
+  infrastructure/
+    db/postgres/           repository interface의 PostgreSQL adapter / dashboard query SQL
+    cache/                 Redis cache adapter
+    queue/                 backfill queue adapter
 
   db/
     client.ts              PostgreSQL/Redis/context 생성
     migrations/            DB 스키마
-    api-queries.ts         대시보드/API 조회 SQL
     checkpoints.ts         checkpoint, cursor lock, rewind
     backfillJobs.ts        백필 range 기록/enqueue fallback
     addressRegistry.ts     asset/facilitator/proxy registry 관리

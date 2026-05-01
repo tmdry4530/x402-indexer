@@ -5,9 +5,9 @@ import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { ApiExceptionFilter } from './api-exception.filter.js';
 import { ApiModule } from './api.module.js';
-import type { AppServices } from './services.js';
+import type { ApiModuleDependencies } from '../runtime/api-dependencies.js';
 
-export type { AppServices } from './services.js';
+export type { ApiModuleDependencies } from '../runtime/api-dependencies.js';
 
 export interface CreateAppOptions {
   logger?: NestApplicationOptions['logger'];
@@ -17,10 +17,10 @@ export interface CreateAppOptions {
 // Nest 애플리케이션 factory.
 // 기존 createApp 진입점은 유지하되 Nest INestApplication을 반환한다.
 export async function createApp(
-  services: AppServices,
+  deps: ApiModuleDependencies,
   options: CreateAppOptions = {},
 ): Promise<NestExpressApplication> {
-  const app = await NestFactory.create<NestExpressApplication>(ApiModule.register(services), {
+  const app = await NestFactory.create<NestExpressApplication>(ApiModule.register(deps), {
     logger: options.logger ?? ['error', 'warn', 'log'],
   });
 

@@ -4,6 +4,12 @@ import {
   ExceptionFilter,
   HttpException,
 } from '@nestjs/common';
+import {
+  DependencyUnavailableError,
+  isApplicationError,
+  NotFoundError,
+  ValidationError,
+} from '../application/errors/application-error.js';
 import { z } from 'zod';
 
 // 이전 HTTP 레이어의 error 응답 contract를 Nest 전역 필터로 유지한다.
@@ -17,6 +23,18 @@ export class ApiExceptionFilter implements ExceptionFilter {
         error: '요청 파라미터가 올바르지 않습니다',
         issues: exception.issues,
       });
+      return;
+    }
+
+    if (isApplicationError(exception)) {
+      const status = exception instanceof NotFoundError
+        ? 404
+        : exception instanceof ValidationError
+          ? 400
+          : exception instanceof DependencyUnavailableError
+            ? 503
+            : 500;
+      response.status(status).json({ error: exception.message });
       return;
     }
 

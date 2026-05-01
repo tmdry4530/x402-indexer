@@ -1,9 +1,8 @@
 import { loadConfig } from './config.js';
 import { createApp } from './api/app.js';
-import { refreshAddressRegistry } from './db/addressRegistry.js';
+import { refreshAddressRegistry, seedAddressRegistry } from './db/addressRegistry.js';
 import { recordQueuedBackfillJob } from './db/backfillJobs.js';
 import { applyMigrations, createDbPool, createPipelineContext, createRedisClient } from './db/client.js';
-import { seedAddressRegistry } from './db/api-queries.js';
 import { loadFacilitatorAddresses, seedFacilitatorAddresses } from './db/facilitatorSource.js';
 import { BackfillWorker } from './workers/backfillWorker.js';
 import { RealtimeWorker } from './workers/realtimeWorker.js';

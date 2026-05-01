@@ -1,5 +1,5 @@
 import type { Pool } from 'pg';
-import { queryMany, queryOne } from './helpers.js';
+import { queryMany, queryOne } from '../../../db/helpers.js';
 
 // API 목록 조회에서 공통으로 쓰는 offset pagination 입력.
 // DB helper들은 limit/offset을 호출부에서 검증했다는 전제로 단순 쿼리만 수행한다.
@@ -313,21 +313,4 @@ export async function listDailyStats(
      OFFSET $${params.length}`,
     params,
   );
-}
-
-// env 또는 외부 source에서 얻은 known address를 address_registry에 seed한다.
-// address를 기준으로 upsert해 운영자가 나중에 name/type을 확인할 수 있게 한다.
-export async function seedAddressRegistry(
-  db: Pool,
-  rows: Array<{ address: string; type: string; name: string | null }>,
-): Promise<void> {
-  // env 기반 known address를 address_registry 테이블에도 반영해 추후 운영/확장 기준점으로 남긴다.
-  for (const row of rows) {
-    await db.query(
-      `INSERT INTO address_registry (address, type, name, valid_from_block, valid_to_block)
-       VALUES ($1, $2, $3, NULL, NULL)
-       ON CONFLICT (address) DO UPDATE SET type = EXCLUDED.type, name = EXCLUDED.name`,
-      [row.address, row.type, row.name],
-    );
-  }
 }
