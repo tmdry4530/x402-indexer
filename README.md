@@ -16,6 +16,49 @@ Base 메인넷에서 발생하는 USDC 온체인 데이터를 읽고, 그중 x40
 
 ---
 
+## 빠른 실행
+
+로컬에서 바로 인덱서를 띄우려면 PostgreSQL과 Redis를 먼저 준비합니다. 기본 `.env.example` 값은 아래 `docker-compose.yml`과 맞춰져 있습니다.
+
+```bash
+git clone https://github.com/tmdry4530/x402-indexer.git
+cd x402-indexer
+
+pnpm install
+cp .env.example .env
+
+docker compose up -d postgres redis
+pnpm dev
+```
+
+기본 설정 그대로 실행하면 API 서버만 뜨고 worker는 비활성화됩니다. 실제 인덱싱을 시작하려면 `.env`에서 worker를 켭니다.
+
+```env
+ENABLE_REALTIME_WORKER=true
+```
+
+백필 작업을 API/queue로 받을 때는 다음 값도 켭니다.
+
+```env
+ENABLE_BACKFILL_WORKER=true
+```
+
+운영 또는 장시간 백필에서는 public RPC가 rate limit에 걸릴 수 있으므로 전용 Base RPC를 권장합니다.
+
+```env
+BASE_RPC_URL=https://your-base-rpc
+BASE_RPC_FALLBACK_URLS=https://fallback-rpc-1,https://fallback-rpc-2
+```
+
+실행 후 확인:
+
+```bash
+curl http://localhost:3000/health
+open http://localhost:3000/ui/
+```
+
+`AUTO_MIGRATE=true`가 기본값이라 앱 시작 시 DB migration은 자동 적용됩니다. 단, `DATABASE_URL`의 database 자체는 미리 존재해야 하며, 위 compose 환경에서는 `x402_indexer` database가 자동 생성됩니다.
+
 ## 아키텍처
 
 전체 구조는 다음과 같습니다.
