@@ -48,3 +48,19 @@ export async function refreshAddressRegistry(
     }
   }
 }
+
+// env 또는 외부 source에서 얻은 known address를 address_registry에 seed한다.
+// address를 기준으로 upsert해 운영자가 나중에 name/type을 확인할 수 있게 한다.
+export async function seedAddressRegistry(
+  db: { query: (sql: string, params?: unknown[]) => Promise<unknown> },
+  rows: Array<{ address: string; type: string; name: string | null }>,
+): Promise<void> {
+  for (const row of rows) {
+    await db.query(
+      `INSERT INTO address_registry (address, type, name, valid_from_block, valid_to_block)
+       VALUES ($1, $2, $3, NULL, NULL)
+       ON CONFLICT (address) DO UPDATE SET type = EXCLUDED.type, name = EXCLUDED.name`,
+      [row.address, row.type, row.name],
+    );
+  }
+}
