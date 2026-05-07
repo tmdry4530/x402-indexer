@@ -1,4 +1,3 @@
-import { serve } from '@hono/node-server';
 import { loadConfig } from './config.js';
 import { createApp } from './api/app.js';
 import { refreshAddressRegistry } from './db/addressRegistry.js';
@@ -13,7 +12,7 @@ import { RealtimeWorker } from './workers/realtimeWorker.js';
 // 설정/인프라/마이그레이션/레지스트리/워커/API 서버를 순서대로 조립한다.
 async function main(): Promise<void> {
   // 앱 전체 부팅 순서:
-  // config 로드 -> DB/Redis 생성 -> migration -> context 조립 -> worker 선택 실행 -> Hono 서버 시작
+  // config 로드 -> DB/Redis 생성 -> migration -> context 조립 -> worker 선택 실행 -> Nest 서버 시작
   const config = loadConfig();
   const db = createDbPool(config.databaseUrl);
   const redis = createRedisClient(config.redisUrl);
@@ -84,23 +83,20 @@ async function main(): Promise<void> {
     console.log('[boot] realtime worker started');
   }
 
-  const app = createApp({
+  const app = await createApp({
     db,
     redis,
     enqueueBackfill: config.runtime.enableBackfillWorker ? ctx.jobs.enqueueBackfill : undefined,
   });
 
-  const server = serve({
-    fetch: app.fetch,
-    port: config.port,
-  });
+  await app.listen(config.port);
   console.log(`[boot] server listening on http://localhost:${config.port}`);
 
   const shutdown = async (signal: string) => {
     // 개발/운영 종료 시 worker와 connection을 순서대로 정리한다.
     console.log(`[shutdown] received ${signal}`);
-    server.close();
     await Promise.allSettled([
+      app.close(),
       realtimeWorker.stop(),
       backfillWorker.stop(),
       db.end(),
