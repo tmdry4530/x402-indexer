@@ -1,10 +1,10 @@
 import request from 'supertest';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createApp, type AppServices } from '../../src/api/app.js';
+import { createApp, type ApiModuleDependencies } from '../../src/api/app.js';
 import { createTestDb, createTestRedis } from '../helpers/test-context.js';
 
-async function createHttpApp(services: AppServices): Promise<NestExpressApplication> {
+async function createHttpApp(services: ApiModuleDependencies): Promise<NestExpressApplication> {
   return createApp(services, { logger: false, staticAssets: false });
 }
 
